@@ -75,18 +75,20 @@ convexHull xs =
         xN = filter (\x -> x /= x0) xs
 
         -- order the rest of the points
-        xsSorted = x0 : (sortBy (angleOrd x0) xN) ++ [x0]
+        xsSorted = x0 : (sortBy (angleOrd x0) xN) ++ []
     in 
-        x0 : computeConvexHull xsSorted ++ [x0]
+        computeConvexHull [] xsSorted ++ [x0]
 
         where 
-            computeConvexHull :: [(Double,Double)] -> [(Double,Double)]
-            computeConvexHull (x:y:z:xs) =
+            computeConvexHull :: [(Double,Double)] -> [(Double,Double)] -> [(Double,Double)]
+            computeConvexHull ps (x:y:z:xs) =
                 let d = getDir x y z
                 in case d of 
-                    TurnLeft  -> y: computeConvexHull (y:z:xs)
-                    _ -> computeConvexHull (x:z:xs)
-            computeConvexHull _ = []
+                    TurnLeft  -> computeConvexHull (x:ps) (y:z:xs)
+                    _ -> case ps of
+                                 (p':ps') -> computeConvexHull ps' (p':x:z:xs)
+                                 _        -> computeConvexHull ps (x:z:xs)
+            computeConvexHull ps x = reverse ps ++ x
 
             angleOrd :: (Double, Double) -> (Double, Double) -> (Double, Double) -> Ordering
             angleOrd p@(px, py) x@(a,b) y@(c,d)
