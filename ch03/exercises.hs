@@ -1,4 +1,5 @@
 import Data.List
+import Debug.Trace
 
 length' :: [a] -> Int
 length' (x:xs) = 1 + (length' xs)
@@ -49,37 +50,63 @@ treeHeight (Node _ ls rs) = 1 + max (treeHeight ls) (treeHeight rs)
 data Direction = TurnLeft | TurnRight | Straight
                  deriving (Show)
 
-getDir :: (Float, Float) -> (Float, Float) -> (Float, Float) -> Direction
+getDir :: (Double, Double) -> (Double, Double) -> (Double, Double) -> Direction
 getDir (a,b) (c,d) (e,f)
-    | slope2 > slope1 = TurnLeft
-    | slope2 < slope1 = TurnRight
-    | otherwise       = Straight
-    where slope1 = (d-b)/(c-a)
-          slope2 = (f-d)/(e-c)
+    | crossProd > 0   = TurnLeft
+    | crossProd < 0   = TurnRight
+    | otherwise = Straight
+    where (x1,y1) = (c-a,d-b)
+          (x2,y2) = (e-c,f-d)
+          crossProd = x1*y2 - x2*y1
 
-getTriplesDirs :: [(Float, Float)] -> [Direction]
+getTriplesDirs :: [(Double, Double)] -> [Direction]
 getTriplesDirs ls@(a:b:c:xs) = (getDir a b c):(getTriplesDirs $ tail ls)
 getTriplesDirs _ = []
 
 
-convexHull :: [(Float, Float)] -> [(Float, Float)]
+convexHull :: [(Double, Double)] -> [(Double, Double)]
 convexHull xs = 
     let 
         -- get the lowest y-coord valued point
-        lowestYCoord = min . map snd $ xs
+        lowestYCoord = minimum $ map snd xs
         eligiblePoints = filter (\x -> snd x == lowestYCoord) xs
-        lowestXCoord = min . map fst $ eligiblePoints
+        lowestXCoord = minimum $ map fst eligiblePoints
         x0 = (lowestXCoord, lowestYCoord)
-        xN = filter (\x -> x /= x0)
+        xN = filter (\x -> x /= x0) xs
 
         -- order the rest of the points
-        xNSorted = x0 : (sortBy (angleOrd x0) xN)
+        xsSorted = x0 : (sortBy (angleOrd x0) xN) ++ [x0]
     in 
-        computeConvexHull (x0:xN) (getTriplesDirs )
+        x0 : computeConvexHull xsSorted ++ [x0]
 
-angleOrd :: (Float, Float) -> (Float, Float) -> (Float, Float) -> Ordering
-angleOrd (px, py) (a,b) (c,d)
-    | slope1 >= slope2 = GT
-    | slope1 < slope2 = LT
-    where slope1 = (b-py)/(a-px)
-          slope2 = (d-py)/(c-px)
+        where 
+            computeConvexHull :: [(Double,Double)] -> [(Double,Double)]
+            computeConvexHull (x:y:z:xs) =
+                let d = getDir x y z
+                in case d of 
+                    TurnLeft  -> y: computeConvexHull (y:z:xs)
+                    _ -> computeConvexHull (x:z:xs)
+            computeConvexHull _ = []
+
+            angleOrd :: (Double, Double) -> (Double, Double) -> (Double, Double) -> Ordering
+            angleOrd p@(px, py) x@(a,b) y@(c,d)
+                | angle > 0 = LT
+                | angle < 0 = GT
+                | otherwise = if dist p x < dist p y
+                              then LT
+                              else GT
+                where (v1x,v1y) = (a-px,b-py)
+                      (v2x,v2y) = (c-px,d-py)
+                      angle = atan2 (v1x*v2y - v1y*v2x) (v1x*v2x + v1y*v2y)
+                  
+            getDir :: (Double, Double) -> (Double, Double) -> (Double, Double) -> Direction
+            getDir (a,b) (c,d) (e,f)
+                | crossProd > 0   = TurnLeft
+                | crossProd < 0   = TurnRight
+                | otherwise = Straight
+                where (x1,y1) = (c-a,d-b)
+                      (x2,y2) = (e-c,f-d)
+                      crossProd = x1*y2 - x2*y1
+
+            dist :: (Double,Double) -> (Double,Double) -> Double
+            dist (a,b) (c,d) = sqrt $ ((c-a)**2) + ((d-b)**2)
